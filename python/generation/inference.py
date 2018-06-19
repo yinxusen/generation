@@ -90,9 +90,11 @@ if __name__ == '__main__':
         with open('{}/infer-of-test.txt'.format(args.data_dir), 'w') as f_infer:
             for i in range(num_steps):
                 print('process batch - {}'.format(i))
-                pred, s_len = sess.run([idx2tags.lookup(model_spec['predictions']),
-                                        inputs['num_tgt_tokens']])
-                for s, l in zip(pred, s_len):
+                pred, t_len, s_len = sess.run(
+                    [idx2tags.lookup(model_spec['predictions']),
+                     inputs['num_tgt_tokens'],
+                     inputs['num_tgt_sentences']])
+                for raw_sentences, n_tokens, n_sentences in zip(pred, t_len, s_len):
                     f_infer.write('\n')
-                    for x, y in zip(s, l):
+                    for x, y in zip(raw_sentences[:n_sentences], n_tokens[:n_sentences]):
                         f_infer.write('{}\n'.format(' '.join(x[:y])))
