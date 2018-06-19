@@ -4,15 +4,12 @@ import argparse
 import logging
 import os
 
-import numpy as np
 import tensorflow as tf
 
 from model.utils import Params
 from model.utils import set_logger
-from model.evaluation import evaluate
-from model.input_fn import input_fn
-from model.input_fn import load_dataset_from_text
-from model.model_fn import model_fn
+from model.input_fn import load_dialogue_from_text, dialogue_input_fn
+from model.nmt_fn import model_fn
 
 
 parser = argparse.ArgumentParser()
@@ -53,8 +50,8 @@ if __name__ == '__main__':
 
     # Create the input data pipeline
     logging.info("Creating the dataset...")
-    test_sentences = load_dataset_from_text(path_eval_sentences, words)
-    test_labels = load_dataset_from_text(path_eval_labels, tags)
+    test_sentences = load_dialogue_from_text(path_eval_sentences, words)
+    test_labels = load_dialogue_from_text(path_eval_labels, tags)
 
     # Specify other parameters for the dataset and the model
     params.infer_size = params.test_size
@@ -62,7 +59,7 @@ if __name__ == '__main__':
     params.id_pad_tag = tags.lookup(tf.constant(params.pad_tag))
 
     # Create iterator over the test set
-    inputs = input_fn('infer', test_sentences, test_labels, params)
+    inputs = dialogue_input_fn('infer', test_sentences, test_labels, params)
     logging.info("- done.")
 
     # Define the model
