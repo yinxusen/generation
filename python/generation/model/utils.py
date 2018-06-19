@@ -112,3 +112,7 @@ def input_len_sentence(x):
         return len_sentence
     else:
         return tf.shape(x)[2]
+
+
+def steps_per_epoch(num_data, batch_size):
+    return (num_data + batch_size - 1) // batch_size
