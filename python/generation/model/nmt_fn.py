@@ -8,19 +8,19 @@ from utils import transpose_batch_time, input_batch_size
 
 
 def build_model(mode, inputs, params, sentence_max_len=None):
-    """Compute logits of the model (output distribution)
-
-    Args:
-        mode: (string) 'train', 'eval', etc.
-        inputs: (dict) contains the inputs of the graph (features, labels...)
-                this can be `tf.placeholder` or outputs of `tf.data`
-        params: (Params) contains hyperparameters of the model (ex: `params.learning_rate`)
-
-    Returns:
-        output: (tf.Tensor) output of the model
+    """
+    Build recurring NMT model for dialogue generation.
+    :param mode:
+    :param inputs:
+    :param params:
+    :param sentence_max_len:
+    :return:
     """
     src = inputs['src']
     tgt = inputs['tgt']
+
+    num_tgt_tokens = inputs['num_tgt_tokens']
+    max_tgt_tokens = tf.reduce_max(num_tgt_tokens, axis=1)
 
     encoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
     decoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
@@ -50,7 +50,8 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     init_state = encoder_cell.zero_state(batch_size, tf.float32)
     init_ta = tf.TensorArray(
        dtype=tf.float32, size=time_steps,
-       element_shape=tf.TensorShape([params.batch_size, 4, params.number_of_tags]))
+       element_shape=tgt_emb_time_major.shape[1:-1].concatenate(
+           tf.TensorShape([params.number_of_tags])))
 
     src_ta = tf.TensorArray(
         dtype=src_emb_time_major.dtype, size=time_steps,
@@ -70,7 +71,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
             dtype=tf.float32)
         helper = tf.contrib.seq2seq.TrainingHelper(
             tgt_sentence,
-            [4] * params.batch_size,
+            max_tgt_tokens,
             time_major=False)
         decoder = tf.contrib.seq2seq.BasicDecoder(
             decoder_cell, helper, inner_state,
@@ -164,7 +165,6 @@ def model_fn(mode, inputs, params, reuse=False):
     # -----------------------------------------------------------
     # MODEL SPECIFICATION
     # Create the model specification and return it
-    # It contains nodes or operations in the graph that will be used for training and evaluation
     model_spec = inputs
     variable_init_op = tf.group(*[tf.global_variables_initializer(),
                                   tf.tables_initializer()])

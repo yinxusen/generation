@@ -177,11 +177,11 @@ def dialogue_input_fn(mode, src_set, tgt_set, params):
 
 
 if __name__ == '__main__':
-    from utils import Params
+    from utils import Params, transpose_batch_time, input_batch_size
     from nmt_fn import build_model
 
     data_dir = '/Users/xusenyin/git-store/dnd/dataset-for-dialogue'
-    model_dir = '../experiments/dialogue-model'
+    model_dir = '/Users/xusenyin/experiments/dialogue-model'
     path_json = model_dir + '/params.json'
     path_src_vocab = data_dir + '/words.txt'
     path_tgt_vocab = data_dir + '/tags.txt'
@@ -204,10 +204,55 @@ if __name__ == '__main__':
 
     inputs = dialogue_input_fn('train', src, tgt, params)
 
-    final_output = build_model('', inputs, params)
+    src = inputs['src']
+    tgt = inputs['tgt']
+
+    encoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
+    decoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
+    projection_layer = tf.layers.Dense(units=params.number_of_tags,
+                                       use_bias=True)
+    zero_padding = tf.constant([[0] * params.embedding_size],
+                               dtype=tf.float32)
+    src_embeddings_ = tf.get_variable(
+        name="src_embeddings", dtype=tf.float32,
+        shape=[params.vocab_size, params.embedding_size])
+    src_embeddings = tf.concat([zero_padding, src_embeddings_], axis=0)
+    tgt_embeddings_ = tf.get_variable(
+        name="tgt_embeddings", dtype=tf.float32,
+        shape=[params.number_of_tags, params.embedding_size])
+    tgt_embeddings = tf.concat([zero_padding, tgt_embeddings_], axis=0)
+
+    src_emb = tf.nn.embedding_lookup(src_embeddings, src)
+    tgt_emb = tf.nn.embedding_lookup(tgt_embeddings, tgt)
+
+    src_emb_time_major = transpose_batch_time(src_emb)
+    tgt_emb_time_major = transpose_batch_time(tgt_emb)
+
+    time_steps = tf.shape(src_emb_time_major)[0]
+    batch_size = input_batch_size(src_emb_time_major)
+
+    init_time = tf.constant(0, dtype=tf.int32)
+    init_state = encoder_cell.zero_state(batch_size, tf.float32)
+    init_ta = tf.TensorArray(
+       dtype=tf.float32, size=time_steps,
+       element_shape=tgt_emb_time_major.shape[1:-1].concatenate(
+           tf.TensorShape([params.number_of_tags])))
+
+    src_ta = tf.TensorArray(
+        dtype=src_emb_time_major.dtype, size=time_steps,
+        element_shape=src_emb_time_major.shape[1:])
+    src_ta = src_ta.unstack(src_emb_time_major)
+
+    tgt_ta = tf.TensorArray(
+        dtype=tgt_emb_time_major.dtype, size=time_steps,
+        element_shape=tgt_emb_time_major.shape[1:])
+    tgt_ta = tgt_ta.unstack(tgt_emb_time_major)
 
     with tf.Session() as sess:
         sess.run(inputs['iterator_init_op'])
         sess.run(tf.global_variables_initializer())
         sess.run(tf.tables_initializer())
-        print(sess.run([tf.reshape(inputs['tgt'], -1)]))
+        i = 0
+        while i < 15:
+            print(sess.run([tf.shape(tgt_ta.read(0))]))
+            i += 1
