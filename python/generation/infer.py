@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 
+from tqdm import trange
 import tensorflow as tf
 
 from generation.model.utils import Params, set_logger, steps_per_epoch
@@ -86,7 +87,7 @@ if __name__ == '__main__':
 
         num_steps = steps_per_epoch(params.infer_size, params.batch_size)
         with open('{}/infer-of-test.txt'.format(args.data_dir), 'w') as f_infer:
-            for i in range(num_steps):
+            for i in trange(num_steps):
                 print('process batch - {}'.format(i))
                 pred, t_len, s_len = sess.run(
                     [idx2tags.lookup(model_spec['predictions']),
