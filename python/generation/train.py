@@ -36,7 +36,7 @@ if __name__ == '__main__':
     num_oov_buckets = params.num_oov_buckets
 
     # Set the logger
-    set_logger(os.path.join(args.model_dir, 'train.log'))
+    set_logger(os.path.join(args.model_dir, 'training.log'))
 
     # Get paths for vocabularies and dataset
     path_words = os.path.join(args.data_dir, 'words.txt')
