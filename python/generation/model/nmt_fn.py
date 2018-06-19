@@ -22,8 +22,26 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     num_tgt_tokens = inputs['num_tgt_tokens']
     max_tgt_tokens = tf.reduce_max(num_tgt_tokens, axis=1)
 
-    encoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
-    decoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
+    if params.model_version == 'lstm':
+        encoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
+        decoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
+    elif params.model_version == 'stack_lstm':
+        def new_cell(state_size):
+            cell = tf.nn.rnn_cell.LSTMCell(state_size)
+            cell = tf.nn.rnn_cell.DropoutWrapper(
+                cell,
+                output_keep_prob=1.-params.dropout_rate)
+            return cell
+        encoder_cell = tf.nn.rnn_cell.MultiRNNCell(
+            [new_cell(params.lstm_num_units)
+             for _ in range(params.lstm_num_layers)])
+        decoder_cell = tf.nn.rnn_cell.MultiRNNCell(
+            [new_cell(params.lstm_num_units)
+             for _ in range(params.lstm_num_layers)])
+    else:
+        raise ValueError(
+            'Unknown model_version: {}'.format(params.model_version))
+
     projection_layer = tf.layers.Dense(units=params.number_of_tags,
                                        use_bias=True)
     zero_padding = tf.constant([[0] * params.embedding_size],
