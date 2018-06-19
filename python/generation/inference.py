@@ -91,6 +91,8 @@ if __name__ == '__main__':
             for i in range(num_steps):
                 print('process batch - {}'.format(i))
                 pred, s_len = sess.run([idx2tags.lookup(model_spec['predictions']),
-                                        model_spec['sentence_lengths']])
+                                        inputs['num_tgt_tokens']])
                 for s, l in zip(pred, s_len):
-                    f_infer.write('{}\n'.format(' '.join(s[:l])))
+                    f_infer.write('\n')
+                    for x, y in zip(s, l):
+                        f_infer.write('{}\n'.format(' '.join(x[:y])))
