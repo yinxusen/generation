@@ -11,9 +11,9 @@ from generation.model.nmt_fn import model_fn
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_dir', default='experiments/base_model',
+parser.add_argument('-m', '--model_dir', default='experiments/base_model',
                     help="Directory containing params.json")
-parser.add_argument('--data_dir', default='data/small',
+parser.add_argument('-d', '--data_dir', default='data/small',
                     help="Directory containing the dataset")
 
 
