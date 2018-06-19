@@ -152,7 +152,8 @@ def dialogue_input_fn(mode, src_set, tgt_set, params):
                                  padding_values=padding_values)
                    .prefetch(1))
     else:
-        dataset = (dataset  # .shuffle(buffer_size=buffer_size)
+        dataset = (dataset
+                   .shuffle(buffer_size=buffer_size)
                    .padded_batch(params.batch_size,
                                  padded_shapes=padded_shapes,
                                  padding_values=padding_values)

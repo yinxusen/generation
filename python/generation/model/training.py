@@ -53,31 +53,30 @@ def train_sess(sess, model_spec, num_steps, writer, params):
 
 def train_and_evaluate(train_model_spec,
                        eval_model_spec,
-                       model_dir, params, restore_from=None):
+                       model_dir, params):
     """
     Train and evaluate model.
     :param train_model_spec:
     :param eval_model_spec:
     :param model_dir:
     :param params:
-    :param restore_from:
     :return:
     """
 
     last_saver = tf.train.Saver(max_to_keep=5)
     best_saver = tf.train.Saver(max_to_keep=1)
-    begin_at_epoch = 0
 
     with tf.Session() as sess:
         # Initialize model variables
         sess.run(train_model_spec['variable_init_op'])
 
-        # Reload weights from directory if specified
+        begin_at_epoch = 0
+        restore_from = tf.train.latest_checkpoint(
+            '{}/last_weights'.format(model_dir))
         if restore_from is not None:
-            logging.info("Restoring parameters from {}".format(restore_from))
-            if os.path.isdir(restore_from):
-                restore_from = tf.train.latest_checkpoint(restore_from)
-                begin_at_epoch = int(restore_from.split('-')[-1])
+            # Reload weights from directory if specified
+            logging.info("Try to restore parameters")
+            begin_at_epoch = int(restore_from.split('-')[-1])
             last_saver.restore(sess, restore_from)
 
         # for tensorboard

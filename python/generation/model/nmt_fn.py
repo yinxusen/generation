@@ -4,7 +4,7 @@ Nested NMT model for context-sensitive dialogue generation.
 
 import tensorflow as tf
 
-from utils import transpose_batch_time, input_batch_size
+from generation.model.utils import transpose_batch_time, input_batch_size
 
 
 def build_model(mode, inputs, params, sentence_max_len=None):

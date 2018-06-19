@@ -8,6 +8,7 @@ from itertools import chain, imap
 
 import tensorflow as tf
 
+
 def flatmap(f, items):
     return list(chain.from_iterable(imap(f, items)))
 
