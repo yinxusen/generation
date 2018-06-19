@@ -24,14 +24,10 @@ if __name__ == '__main__':
     # Load the parameters from the experiment params.json file in model_dir
     args = parser.parse_args()
     json_path = os.path.join(args.model_dir, 'params.json')
-    assert(os.path.isfile(json_path),
-           "No json configuration file found at {}".format(json_path))
     params = Params(json_path)
 
     # Load the parameters from the dataset, that gives the size etc. into params
     json_path = os.path.join(args.data_dir, 'dataset_params.json')
-    assert(os.path.isfile(json_path),
-           "No json file found at {}, run build_vocab.py".format(json_path))
     params.update(json_path)
     num_oov_buckets = params.num_oov_buckets
 

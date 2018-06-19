@@ -23,13 +23,9 @@ if __name__ == '__main__':
     # Load the parameters
     args = parser.parse_args()
     json_path = os.path.join(args.model_dir, 'params.json')
-    assert(os.path.isfile(json_path),
-           "No json configuration file found at {}".format(json_path))
     params = Params(json_path)
 
     json_path = os.path.join(args.data_dir, 'dataset_params.json')
-    assert(os.path.isfile(json_path),
-           "No json file found at {}, run build.py".format(json_path))
     params.update(json_path)
     num_oov_buckets = params.num_oov_buckets
 
@@ -88,7 +84,6 @@ if __name__ == '__main__':
         num_steps = steps_per_epoch(params.infer_size, params.batch_size)
         with open('{}/infer-of-test.txt'.format(args.data_dir), 'w') as f_infer:
             for i in trange(num_steps):
-                print('process batch - {}'.format(i))
                 pred, t_len, s_len = sess.run(
                     [idx2tags.lookup(model_spec['predictions']),
                      inputs['num_tgt_tokens'],

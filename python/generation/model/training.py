@@ -63,8 +63,8 @@ def train_and_evaluate(train_model_spec,
     :return:
     """
 
-    last_saver = tf.train.Saver(max_to_keep=5)
-    best_saver = tf.train.Saver(max_to_keep=1)
+    last_saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
+    best_saver = tf.train.Saver(max_to_keep=1, save_relative_paths=True)
 
     with tf.Session() as sess:
         # Initialize model variables
@@ -94,9 +94,6 @@ def train_and_evaluate(train_model_spec,
                 logging.info(
                     'stop training by early_stop: {}'.format(early_stop_epochs))
                 break
-            else:
-                early_stop_cnt += 1
-                logging.info('no improvement {} epochs'.format(early_stop_cnt))
 
             logging.info("Epoch {}/{}".format(
                 epoch + 1, begin_at_epoch + params.num_epochs))
@@ -132,6 +129,9 @@ def train_and_evaluate(train_model_spec,
                 best_json_path = os.path.join(model_dir,
                                               "metrics_eval_best_weights.json")
                 save_dict_to_json(metrics, best_json_path)
+            else:
+                early_stop_cnt += 1
+                logging.info('no improvement {} epochs'.format(early_stop_cnt))
 
             # Save latest eval metrics in a json file in the model directory
             last_json_path = os.path.join(model_dir,
