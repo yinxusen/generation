@@ -86,7 +86,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
         tgt_sentence = tgt_ta.read(t)
         # this is only for testing purpose to set all initial state zeros.
         _, inner_state = tf.nn.dynamic_rnn(
-            encoder_cell, src_sentence, initial_state=init_state,
+            encoder_cell, src_sentence, initial_state=None,
             dtype=tf.float32)
         helper = tf.contrib.seq2seq.TrainingHelper(
             tgt_sentence,
