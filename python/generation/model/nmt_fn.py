@@ -84,8 +84,9 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     def process_dialogue(t, input_ta, input_state):
         src_sentence = src_ta.read(t)
         tgt_sentence = tgt_ta.read(t)
+        # this is only for testing purpose to set all initial state zeros.
         _, inner_state = tf.nn.dynamic_rnn(
-            encoder_cell, src_sentence, initial_state=input_state,
+            encoder_cell, src_sentence, initial_state=init_state,
             dtype=tf.float32)
         helper = tf.contrib.seq2seq.TrainingHelper(
             tgt_sentence,
