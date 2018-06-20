@@ -17,7 +17,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     :return:
     """
     src = inputs['src']
-    tgt = inputs['tgt']
+    tgt_in = inputs['tgt_in']
 
     num_tgt_tokens = inputs['num_tgt_tokens']
     max_tgt_tokens = tf.reduce_max(num_tgt_tokens, axis=1)
@@ -56,10 +56,10 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     tgt_embeddings = tf.concat([zero_padding, tgt_embeddings_], axis=0)
 
     src_emb = tf.nn.embedding_lookup(src_embeddings, src)
-    tgt_emb = tf.nn.embedding_lookup(tgt_embeddings, tgt)
+    tgt_in_emb = tf.nn.embedding_lookup(tgt_embeddings, tgt_in)
 
     src_emb_time_major = transpose_batch_time(src_emb)
-    tgt_emb_time_major = transpose_batch_time(tgt_emb)
+    tgt_in_emb_time_major = transpose_batch_time(tgt_in_emb)
 
     time_steps = tf.shape(src_emb_time_major)[0]
     batch_size = input_batch_size(src_emb_time_major)
@@ -68,7 +68,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     init_state = encoder_cell.zero_state(batch_size, tf.float32)
     init_ta = tf.TensorArray(
        dtype=tf.float32, size=time_steps,
-       element_shape=tgt_emb_time_major.shape[1:-1].concatenate(
+       element_shape=tgt_in_emb_time_major.shape[1:-1].concatenate(
            tf.TensorShape([params.number_of_tags])))
 
     src_ta = tf.TensorArray(
@@ -76,19 +76,19 @@ def build_model(mode, inputs, params, sentence_max_len=None):
         element_shape=src_emb_time_major.shape[1:])
     src_ta = src_ta.unstack(src_emb_time_major)
 
-    tgt_ta = tf.TensorArray(
-        dtype=tgt_emb_time_major.dtype, size=time_steps,
-        element_shape=tgt_emb_time_major.shape[1:])
-    tgt_ta = tgt_ta.unstack(tgt_emb_time_major)
+    tgt_in_ta = tf.TensorArray(
+        dtype=tgt_in_emb_time_major.dtype, size=time_steps,
+        element_shape=tgt_in_emb_time_major.shape[1:])
+    tgt_in_ta = tgt_in_ta.unstack(tgt_in_emb_time_major)
 
     def process_dialogue(t, input_ta, input_state):
         src_sentence = src_ta.read(t)
-        tgt_sentence = tgt_ta.read(t)
+        tgt_in_sentence = tgt_in_ta.read(t)
         _, inner_state = tf.nn.dynamic_rnn(
             encoder_cell, src_sentence, initial_state=input_state,
             dtype=tf.float32)
         helper = tf.contrib.seq2seq.TrainingHelper(
-            tgt_sentence,
+            tgt_in_sentence,
             max_tgt_tokens,
             time_major=False)
         decoder = tf.contrib.seq2seq.BasicDecoder(
@@ -131,7 +131,7 @@ def model_fn(mode, inputs, params, reuse=False):
     num_tgt_sentences = inputs['num_tgt_sentences']
 
     mask = tf.sequence_mask(num_tgt_tokens)
-    labels = inputs['tgt']
+    labels = inputs['tgt_out']
     zero_labels = tf.zeros_like(labels)
     labels = tf.where(labels > 0, labels - 1, zero_labels)
 

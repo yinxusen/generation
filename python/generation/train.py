@@ -6,7 +6,7 @@ import tensorflow as tf
 
 from generation.model.utils import Params, set_logger
 from generation.model.training import train_and_evaluate
-from generation.model.input_fn import dialogue_input_fn, load_dialogue_from_text
+from generation.model.input_fn import dialogue_input_fn
 from generation.model.nmt_fn import model_fn
 
 
@@ -42,30 +42,16 @@ if __name__ == '__main__':
     path_eval_sentences = os.path.join(args.data_dir, 'dev/sentences.txt')
     path_eval_labels = os.path.join(args.data_dir, 'dev/labels.txt')
 
-    # Load Vocabularies
-    words = tf.contrib.lookup.index_table_from_file(
-        path_words,
-        num_oov_buckets=num_oov_buckets)
-    tags = tf.contrib.lookup.index_table_from_file(path_tags)
-
     # Create the input data pipeline
     logging.info("Creating the datasets...")
-
-    train_sentences = load_dialogue_from_text(path_train_sentences, words)
-    train_labels = load_dialogue_from_text(path_train_labels, tags)
-    eval_sentences = load_dialogue_from_text(path_eval_sentences, words)
-    eval_labels = load_dialogue_from_text(path_eval_labels, tags)
-
     # Specify other parameters for the dataset and the model
     params.eval_size = params.dev_size
-    params.buffer_size = params.train_size
-    params.id_pad_word = words.lookup(tf.constant(params.pad_word))
-    params.id_pad_tag = tags.lookup(tf.constant(params.pad_tag))
+    params.buffer_size = params.batch_size * 10
 
     # Create the two iterators over the two datasets
     train_inputs = dialogue_input_fn(
-        'train', train_sentences, train_labels, params)
-    eval_inputs = dialogue_input_fn('eval', eval_sentences, eval_labels, params)
+        'train', path_train_sentences, path_train_labels, path_words, path_tags, params)
+    eval_inputs = dialogue_input_fn('eval', path_eval_sentences, path_eval_labels, path_words, path_tags, params)
     logging.info("done.")
 
     logging.info("Creating the model...")
