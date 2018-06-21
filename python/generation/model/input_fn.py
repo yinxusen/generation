@@ -88,35 +88,40 @@ def input_fn(mode, sentences, labels, params):
     return inputs
 
 
-def load_dialogue_from_text(path_txt, vocab):
-    """
-    Load dialogue from text.
-    Either read player's input or master's input.
-    Input should be in the format:
-      command-sentence-1 command-sentence-2 ...
-
-    :param path_txt:
-    :param vocab:
-    :return:
-    """
-    dataset = tf.data.TextLineDataset(path_txt)
-    dataset = (dataset
-               .map(lambda string: tf.string_split([string]).values)
-               .map(lambda chunks: (tf.string_split(chunks, delimiter='-'),
-                                    tf.size(chunks)))
-               .map(lambda chunks, size: (tf.sparse_to_dense(chunks.indices,
-                                                             chunks.dense_shape,
-                                                             vocab.lookup(chunks.values) + 1),
-                                          size))
-               .map(lambda dat, num_sentences: (dat,
-                                                tf.count_nonzero(dat, axis=1, dtype=tf.int32),
-                                                num_sentences))
-               )
-
-    return dataset
+def string_tensor_to_dense_mat(string_tensor, lookup_tbl):
+    return (string_tensor
+     .map(lambda chunks: (tf.string_split(chunks, delimiter='-'),
+                          tf.size(chunks)))
+     .map(lambda chunks, size: (tf.sparse_to_dense(chunks.indices,
+                                chunks.dense_shape,
+                                lookup_tbl.lookup(chunks.values) + 1),
+                                size))
+     .map(lambda dat, size: (dat,
+                             tf.count_nonzero(dat, axis=1, dtype=tf.int32),
+                             size)))
 
 
-def dialogue_input_fn(mode, src_set, tgt_set, params):
+def load_src_dialogue(path_txt, vocab):
+    dataset = (tf.data.TextLineDataset(path_txt)
+               .map(lambda s: tf.string_split([s]).values))
+    return string_tensor_to_dense_mat(dataset, vocab)
+
+
+def load_tgt_dialogue(path_txt, vocab):
+    dataset = (tf.data.TextLineDataset(path_txt)
+               .map(lambda s: tf.string_split([s]).values))
+    tgt_input = dataset.map(
+        lambda substrs: tf.map_fn(lambda s: '<s>-' + s, substrs))
+    tgt_output = dataset.map(
+        lambda substrs: tf.map_fn(lambda s: s + '-</s>', substrs))
+    return (string_tensor_to_dense_mat(tgt_input, vocab),
+            string_tensor_to_dense_mat(tgt_output, vocab))
+
+
+def dialogue_input_fn(mode,
+                      path_src, path_tgt,
+                      path_src_vocab, path_tgt_vocab,
+                      params):
     """
     Read dialogue as input for NMT.
     :param mode: "train" or "infer"
@@ -129,16 +134,28 @@ def dialogue_input_fn(mode, src_set, tgt_set, params):
     is_inferring = (mode == 'infer')
     buffer_size = params.buffer_size if is_training else 1
 
-    dataset = tf.data.Dataset.zip((src_set, tgt_set))
+    src_vocab = tf.contrib.lookup.index_table_from_file(
+        path_src_vocab, num_oov_buckets=params.num_oov_buckets)
+    tgt_vocab = tf.contrib.lookup.index_table_from_file(path_tgt_vocab)
+
+    src_set = load_src_dialogue(path_src, src_vocab)
+    tgt_in_set, tgt_out_set = load_tgt_dialogue(path_tgt, tgt_vocab)
+    dataset = tf.data.Dataset.zip((src_set, tgt_in_set, tgt_out_set))
 
     padded_shapes = ((tf.TensorShape([None, None]),  # src
                       tf.TensorShape([None]),  # size(indices)
                       tf.TensorShape([])),  # size(src)
-                     (tf.TensorShape([None, None]),  # tgt
+                     (tf.TensorShape([None, None]),  # tgt input
+                      tf.TensorShape([None]),  # size(indices)
+                      tf.TensorShape([])),  # size(tgt)
+                     (tf.TensorShape([None, None]),  # tgt output
                       tf.TensorShape([None]),  # size(indices)
                       tf.TensorShape([])))  # size(tgt)
 
     padding_values = ((tf.constant(0, dtype='int64'),
+                       tf.constant(0, dtype='int32'),
+                       tf.constant(0, dtype='int32')),
+                      (tf.constant(0, dtype='int64'),
                        tf.constant(0, dtype='int32'),
                        tf.constant(0, dtype='int32')),
                       (tf.constant(0, dtype='int64'),
@@ -161,14 +178,16 @@ def dialogue_input_fn(mode, src_set, tgt_set, params):
 
     iterator = dataset.make_initializable_iterator()
     ((src, num_src_tokens, num_src_sentences),
-     (tgt, num_tgt_tokens, num_tgt_sentences)) = iterator.get_next()
+     (tgt_in, num_tgt_tokens, num_tgt_sentences),
+     (tgt_out, _, _)) = iterator.get_next()
     init_op = iterator.initializer
 
     inputs = {
         'src': src,
         'num_src_tokens': num_src_tokens,
         'num_src_sentences': num_src_sentences,
-        'tgt': tgt,
+        'tgt_in': tgt_in,
+        'tgt_out': tgt_out,
         'num_tgt_tokens': num_tgt_tokens,
         'num_tgt_sentences': num_tgt_sentences,
         'iterator_init_op': init_op
@@ -194,66 +213,15 @@ if __name__ == '__main__':
     params.eval_size = params.dev_size
     params.buffer_size = params.train_size  # buffer size for shuffling
 
-    words = tf.contrib.lookup.index_table_from_file(path_src_vocab)
-    tags = tf.contrib.lookup.index_table_from_file(path_tgt_vocab)
-
-    params.id_pad_word = words.lookup(tf.constant(params.pad_word))
-    params.id_pad_tag = tags.lookup(tf.constant(params.pad_tag))
-
-    src = load_dialogue_from_text(path_src, words)
-    tgt = load_dialogue_from_text(path_tgt, tags)
-
-    inputs = dialogue_input_fn('train', src, tgt, params)
+    inputs = dialogue_input_fn(
+        'train', path_src, path_tgt, path_src_vocab, path_tgt_vocab, params)
 
     src = inputs['src']
-    tgt = inputs['tgt']
-
-    encoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
-    decoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
-    projection_layer = tf.layers.Dense(units=params.number_of_tags,
-                                       use_bias=True)
-    zero_padding = tf.constant([[0] * params.embedding_size],
-                               dtype=tf.float32)
-    src_embeddings_ = tf.get_variable(
-        name="src_embeddings", dtype=tf.float32,
-        shape=[params.vocab_size, params.embedding_size])
-    src_embeddings = tf.concat([zero_padding, src_embeddings_], axis=0)
-    tgt_embeddings_ = tf.get_variable(
-        name="tgt_embeddings", dtype=tf.float32,
-        shape=[params.number_of_tags, params.embedding_size])
-    tgt_embeddings = tf.concat([zero_padding, tgt_embeddings_], axis=0)
-
-    src_emb = tf.nn.embedding_lookup(src_embeddings, src)
-    tgt_emb = tf.nn.embedding_lookup(tgt_embeddings, tgt)
-
-    src_emb_time_major = transpose_batch_time(src_emb)
-    tgt_emb_time_major = transpose_batch_time(tgt_emb)
-
-    time_steps = tf.shape(src_emb_time_major)[0]
-    batch_size = input_batch_size(src_emb_time_major)
-
-    init_time = tf.constant(0, dtype=tf.int32)
-    init_state = encoder_cell.zero_state(batch_size, tf.float32)
-    init_ta = tf.TensorArray(
-       dtype=tf.float32, size=time_steps,
-       element_shape=tgt_emb_time_major.shape[1:-1].concatenate(
-           tf.TensorShape([params.number_of_tags])))
-
-    src_ta = tf.TensorArray(
-        dtype=src_emb_time_major.dtype, size=time_steps,
-        element_shape=src_emb_time_major.shape[1:])
-    src_ta = src_ta.unstack(src_emb_time_major)
-
-    tgt_ta = tf.TensorArray(
-        dtype=tgt_emb_time_major.dtype, size=time_steps,
-        element_shape=tgt_emb_time_major.shape[1:])
-    tgt_ta = tgt_ta.unstack(tgt_emb_time_major)
+    tgt_input = inputs['tgt_in']
+    tgt_output = inputs['tgt_out']
 
     with tf.Session() as sess:
-        sess.run(inputs['iterator_init_op'])
         sess.run(tf.global_variables_initializer())
         sess.run(tf.tables_initializer())
-        i = 0
-        while i < 15:
-            print(sess.run([tf.shape(tgt_ta.read(0))]))
-            i += 1
+        sess.run(inputs['iterator_init_op'])
+        print(sess.run([src, tgt_input, tgt_output]))
