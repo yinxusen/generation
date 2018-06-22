@@ -128,7 +128,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
         target_length = num_tgt_tokens_ta.read(t)  # ? don't need
         _, inner_state = tf.nn.dynamic_rnn(
             encoder_cell, src_sentence, sequence_length=source_length,
-            initial_state=input_state,
+            initial_state=None,
             dtype=tf.float32)
         helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
             tgt_embeddings,
