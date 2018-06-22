@@ -6,14 +6,14 @@ from tqdm import trange
 import tensorflow as tf
 
 from generation.model.utils import Params, set_logger, steps_per_epoch
-from generation.model.input_fn import load_dialogue_from_text, dialogue_input_fn
+from generation.model.input_fn import dialogue_input_fn
 from generation.model.nmt_fn import model_fn
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_dir', default='experiments/base_model',
+parser.add_argument('-m', '--model_dir', default='experiments/base_model',
                     help="Directory containing params.json")
-parser.add_argument('--data_dir', default='data/small',
+parser.add_argument('-d', '--data_dir', default='data/small',
                     help="Directory containing the dataset")
 
 if __name__ == '__main__':
@@ -38,24 +38,15 @@ if __name__ == '__main__':
     path_eval_sentences = os.path.join(args.data_dir, 'test/sentences.txt')
     path_eval_labels = os.path.join(args.data_dir, 'test/labels.txt')
 
-    # Load Vocabularies
-    words = tf.contrib.lookup.index_table_from_file(
-        path_words,
-        num_oov_buckets=num_oov_buckets)
-    tags = tf.contrib.lookup.index_table_from_file(path_tags)
-
     # Create the input data pipeline
     logging.info("Creating the dataset...")
-    test_sentences = load_dialogue_from_text(path_eval_sentences, words)
-    test_labels = load_dialogue_from_text(path_eval_labels, tags)
 
     # Specify other parameters for the dataset and the model
     params.infer_size = params.test_size
-    params.id_pad_word = words.lookup(tf.constant(params.pad_word))
-    params.id_pad_tag = tags.lookup(tf.constant(params.pad_tag))
+    params.buffer_size = 1
 
     # Create iterator over the test set
-    inputs = dialogue_input_fn('infer', test_sentences, test_labels, params)
+    inputs = dialogue_input_fn('infer', path_eval_sentences, path_eval_labels, path_words, path_tags, params)
     logging.info("done.")
 
     # Define the model

@@ -20,7 +20,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     tgt_in = inputs['tgt_in']
 
     num_tgt_tokens = inputs['num_tgt_tokens']
-    max_tgt_tokens = tf.reduce_max(num_tgt_tokens, axis=1)
+    num_src_tokens = inputs['num_src_tokens']
 
     if params.model_version == 'lstm':
         encoder_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
@@ -61,6 +61,9 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     src_emb_time_major = transpose_batch_time(src_emb)
     tgt_in_emb_time_major = transpose_batch_time(tgt_in_emb)
 
+    num_src_tokens_time_major = transpose_batch_time(num_src_tokens)
+    num_tgt_tokens_time_major = transpose_batch_time(num_tgt_tokens)
+
     time_steps = tf.shape(src_emb_time_major)[0]
     batch_size = input_batch_size(src_emb_time_major)
 
@@ -81,24 +84,65 @@ def build_model(mode, inputs, params, sentence_max_len=None):
         element_shape=tgt_in_emb_time_major.shape[1:])
     tgt_in_ta = tgt_in_ta.unstack(tgt_in_emb_time_major)
 
-    def process_dialogue(t, input_ta, input_state):
+    num_src_tokens_ta = tf.TensorArray(
+        dtype=num_src_tokens_time_major.dtype,
+        size=time_steps, element_shape=num_src_tokens_time_major.shape[1:])
+    num_src_tokens_ta = num_src_tokens_ta.unstack(num_src_tokens_time_major)
+
+    num_tgt_tokens_ta = tf.TensorArray(
+        dtype=num_tgt_tokens_time_major.dtype,
+        size=time_steps, element_shape=num_tgt_tokens_time_major.shape[1:])
+    num_tgt_tokens_ta = num_tgt_tokens_ta.unstack(num_tgt_tokens_time_major)
+    max_num_tgt_tokens = tf.reduce_max(num_tgt_tokens)
+
+    def process_dialogue_train(t, input_ta, input_state):
         src_sentence = src_ta.read(t)
         tgt_in_sentence = tgt_in_ta.read(t)
+        source_length = num_src_tokens_ta.read(t)
+        target_length = num_tgt_tokens_ta.read(t)
         _, inner_state = tf.nn.dynamic_rnn(
-            encoder_cell, src_sentence, initial_state=input_state,
+            encoder_cell, src_sentence, sequence_length=source_length,
+            initial_state=input_state,
             dtype=tf.float32)
         helper = tf.contrib.seq2seq.TrainingHelper(
             tgt_in_sentence,
-            max_tgt_tokens,
+            target_length,
             time_major=False)
         decoder = tf.contrib.seq2seq.BasicDecoder(
             decoder_cell, helper, inner_state,
             output_layer=projection_layer)
         outputs, output_state, _ = tf.contrib.seq2seq.dynamic_decode(
-            decoder, output_time_major=False,
+            decoder, output_time_major=False, impute_finished=True,
             swap_memory=True)
+        rnn_output = outputs.rnn_output
+        shape = tf.shape(rnn_output)
+        paddings = tf.zeros(shape=[shape[0], max_num_tgt_tokens-shape[1], shape[2]])
+        rnn_output = tf.concat([rnn_output, paddings], axis=1)
+        output_ta = input_ta.write(t, rnn_output)
+        return t + 1, output_ta, output_state
+
+    def process_dialogue_infer(t, input_ta, input_state):
+        src_sentence = src_ta.read(t)
+        tgt_in_sentence = tgt_in_ta.read(t)  # ? don't need
+        source_length = num_src_tokens_ta.read(t)
+        target_length = num_tgt_tokens_ta.read(t)  # ? don't need
+        _, inner_state = tf.nn.dynamic_rnn(
+            encoder_cell, src_sentence, sequence_length=source_length,
+            initial_state=input_state,
+            dtype=tf.float32)
+        helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
+            tgt_embeddings,
+            tf.fill([batch_size], 1), 2)
+        decoder = tf.contrib.seq2seq.BasicDecoder(
+            decoder_cell, helper, inner_state,
+            output_layer=projection_layer)
+        outputs, output_state, _ = tf.contrib.seq2seq.dynamic_decode(
+            decoder, output_time_major=False,
+            swap_memory=True, maximum_iterations=5*2)
         output_ta = input_ta.write(t, outputs.rnn_output)
         return t + 1, output_ta, output_state
+
+    process_dialogue = process_dialogue_infer if mode == 'infer' else process_dialogue_train
 
     _, final_output_ta, final_state = tf.while_loop(
         cond=lambda t, *_: t < time_steps,
