@@ -4,8 +4,6 @@ Nested NMT model for context-sensitive dialogue generation.
 
 import tensorflow as tf
 
-from generation.model.utils import transpose_batch_time, input_batch_size
-
 
 def build_model(mode, inputs, params, sentence_max_len=None):
     """
@@ -44,69 +42,27 @@ def build_model(mode, inputs, params, sentence_max_len=None):
 
     projection_layer = tf.layers.Dense(units=params.number_of_tags,
                                        use_bias=True)
-    zero_padding = tf.constant([[0] * params.embedding_size],
-                               dtype=tf.float32)
-    src_embeddings_ = tf.get_variable(
+
+    src_embeddings = tf.get_variable(
         name="src_embeddings", dtype=tf.float32,
         shape=[params.vocab_size, params.embedding_size])
-    src_embeddings = tf.concat([zero_padding, src_embeddings_], axis=0)
-    tgt_embeddings_ = tf.get_variable(
+    tgt_embeddings = tf.get_variable(
         name="tgt_embeddings", dtype=tf.float32,
         shape=[params.number_of_tags, params.embedding_size])
-    tgt_embeddings = tf.concat([zero_padding, tgt_embeddings_], axis=0)
 
     src_emb = tf.nn.embedding_lookup(src_embeddings, src)
     tgt_in_emb = tf.nn.embedding_lookup(tgt_embeddings, tgt_in)
 
-    src_emb_time_major = transpose_batch_time(src_emb)
-    tgt_in_emb_time_major = transpose_batch_time(tgt_in_emb)
+    batch_size = tf.shape(src_emb)[0]
 
-    num_src_tokens_time_major = transpose_batch_time(num_src_tokens)
-    num_tgt_tokens_time_major = transpose_batch_time(num_tgt_tokens)
-
-    time_steps = tf.shape(src_emb_time_major)[0]
-    batch_size = input_batch_size(src_emb_time_major)
-
-    init_time = tf.constant(0, dtype=tf.int32)
-    init_state = encoder_cell.zero_state(batch_size, tf.float32)
-    init_ta = tf.TensorArray(
-       dtype=tf.float32, size=time_steps,
-       element_shape=tgt_in_emb_time_major.shape[1:-1].concatenate(
-           tf.TensorShape([params.number_of_tags])))
-
-    src_ta = tf.TensorArray(
-        dtype=src_emb_time_major.dtype, size=time_steps,
-        element_shape=src_emb_time_major.shape[1:])
-    src_ta = src_ta.unstack(src_emb_time_major)
-
-    tgt_in_ta = tf.TensorArray(
-        dtype=tgt_in_emb_time_major.dtype, size=time_steps,
-        element_shape=tgt_in_emb_time_major.shape[1:])
-    tgt_in_ta = tgt_in_ta.unstack(tgt_in_emb_time_major)
-
-    num_src_tokens_ta = tf.TensorArray(
-        dtype=num_src_tokens_time_major.dtype,
-        size=time_steps, element_shape=num_src_tokens_time_major.shape[1:])
-    num_src_tokens_ta = num_src_tokens_ta.unstack(num_src_tokens_time_major)
-
-    num_tgt_tokens_ta = tf.TensorArray(
-        dtype=num_tgt_tokens_time_major.dtype,
-        size=time_steps, element_shape=num_tgt_tokens_time_major.shape[1:])
-    num_tgt_tokens_ta = num_tgt_tokens_ta.unstack(num_tgt_tokens_time_major)
-    max_num_tgt_tokens = tf.reduce_max(num_tgt_tokens)
-
-    def process_dialogue_train(t, input_ta, input_state):
-        src_sentence = src_ta.read(t)
-        tgt_in_sentence = tgt_in_ta.read(t)
-        source_length = num_src_tokens_ta.read(t)
-        target_length = num_tgt_tokens_ta.read(t)
-        _, inner_state = tf.nn.dynamic_rnn(
-            encoder_cell, src_sentence, sequence_length=source_length,
-            initial_state=None,
-            dtype=tf.float32)
+    _, inner_state = tf.nn.dynamic_rnn(
+        encoder_cell, src_emb, sequence_length=num_src_tokens,
+        initial_state=None,
+        dtype=tf.float32)
+    if mode == 'train':
         helper = tf.contrib.seq2seq.TrainingHelper(
-            tgt_in_sentence,
-            target_length,
+            tgt_in_emb,
+            num_tgt_tokens,
             time_major=False)
         decoder = tf.contrib.seq2seq.BasicDecoder(
             decoder_cell, helper, inner_state,
@@ -115,44 +71,20 @@ def build_model(mode, inputs, params, sentence_max_len=None):
             decoder, output_time_major=False, impute_finished=True,
             swap_memory=True)
         rnn_output = outputs.rnn_output
-        shape = tf.shape(rnn_output)
-        paddings = tf.zeros(shape=[shape[0], max_num_tgt_tokens-shape[1], shape[2]])
-        rnn_output = tf.concat([rnn_output, paddings], axis=1)
-        output_ta = input_ta.write(t, rnn_output)
-        return t + 1, output_ta, output_state
-
-    def process_dialogue_infer(t, input_ta, input_state):
-        src_sentence = src_ta.read(t)
-        tgt_in_sentence = tgt_in_ta.read(t)  # ? don't need
-        source_length = num_src_tokens_ta.read(t)
-        target_length = num_tgt_tokens_ta.read(t)  # ? don't need
-        _, inner_state = tf.nn.dynamic_rnn(
-            encoder_cell, src_sentence, sequence_length=source_length,
-            initial_state=input_state,
-            dtype=tf.float32)
+    elif mode == 'infer':
         helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
             tgt_embeddings,
-            tf.fill([batch_size], 1), 2)
+            tf.fill([batch_size], 0), 1)
         decoder = tf.contrib.seq2seq.BasicDecoder(
             decoder_cell, helper, inner_state,
             output_layer=projection_layer)
         outputs, output_state, _ = tf.contrib.seq2seq.dynamic_decode(
             decoder, output_time_major=False,
             swap_memory=True, maximum_iterations=5*2)
-        output_ta = input_ta.write(t, outputs.rnn_output)
-        return t + 1, output_ta, output_state
-
-    process_dialogue = process_dialogue_infer if mode == 'infer' else process_dialogue_train
-
-    _, final_output_ta, final_state = tf.while_loop(
-        cond=lambda t, *_: t < time_steps,
-        body=process_dialogue,
-        loop_vars=(init_time, init_ta, init_state)
-    )
-
-    final_output = transpose_batch_time(final_output_ta.stack())
-
-    return final_output
+        rnn_output = outputs.rnn_output
+    else:
+        raise ValueError('unknown mode {}'.format(mode))
+    return rnn_output
 
 
 def model_fn(mode, inputs, params, reuse=False):
@@ -169,15 +101,10 @@ def model_fn(mode, inputs, params, reuse=False):
         model_spec: (dict) contains the graph operations or nodes needed for training / evaluation
     """
     is_training = (mode == 'train')
-    num_src_tokens = inputs['num_src_tokens']
     num_tgt_tokens = inputs['num_tgt_tokens']
-    num_src_sentences = inputs['num_src_sentences']
-    num_tgt_sentences = inputs['num_tgt_sentences']
 
     mask = tf.sequence_mask(num_tgt_tokens)
     labels = inputs['tgt_out']
-    zero_labels = tf.zeros_like(labels)
-    labels = tf.where(labels > 0, labels - 1, zero_labels)
 
     # -----------------------------------------------------------
     # MODEL: define the layers of the model

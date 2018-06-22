@@ -197,7 +197,7 @@ def dialogue_input_fn(mode,
 
 
 if __name__ == '__main__':
-    from utils import Params, transpose_batch_time, input_batch_size
+    from utils import Params, transpose_batch_time, input_batch_size, steps_per_epoch
     from nmt_fn import build_model
 
     data_dir = '/Users/xusenyin/git-store/dnd/dataset-for-dialogue'
@@ -219,9 +219,13 @@ if __name__ == '__main__':
     src = inputs['src']
     tgt_input = inputs['tgt_in']
     tgt_output = inputs['tgt_out']
+    num_tgt_tokens = inputs['num_tgt_tokens']
+    res = tf.reduce_max(num_tgt_tokens, axis=0)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(tf.tables_initializer())
         sess.run(inputs['iterator_init_op'])
-        print(sess.run([src, tgt_input, tgt_output]))
+
+        for i in range(steps_per_epoch(2000, 128)):
+            print(sess.run([tf.shape(res), res]))

@@ -6,8 +6,8 @@ from tqdm import trange
 import tensorflow as tf
 
 from generation.model.utils import Params, set_logger, steps_per_epoch
-from generation.model.input_fn import dialogue_input_fn
-from generation.model.nmt_fn import model_fn
+from generation.model.plain_nmt_input_fn import dialogue_input_fn
+from generation.model.plain_nmt_fn import model_fn
 
 
 parser = argparse.ArgumentParser()
@@ -73,13 +73,14 @@ if __name__ == '__main__':
         saver.restore(sess, save_path)
 
         num_steps = steps_per_epoch(params.infer_size, params.batch_size)
+        acc_total = 0
         with open('{}/infer-of-test.txt'.format(args.data_dir), 'w') as f_infer:
             for i in trange(num_steps):
-                pred, t_len, s_len = sess.run(
+                pred, acc, t_len = sess.run(
                     [idx2tags.lookup(model_spec['predictions']),
-                     inputs['num_tgt_tokens'],
-                     inputs['num_tgt_sentences']])
-                for raw_sentences, n_tokens, n_sentences in zip(pred, t_len, s_len):
-                    f_infer.write('\n')
-                    for x, y in zip(raw_sentences[:n_sentences], n_tokens[:n_sentences]):
-                        f_infer.write('{}\n'.format(' '.join(x[:y])))
+                     model_spec['accuracy'],
+                     inputs['num_tgt_tokens']])
+                acc_total += acc
+                for tokens, lens in zip(pred, t_len):
+                    f_infer.write('{}\n'.format(' '.join(tokens)))
+        print(1. * acc_total / num_steps)
