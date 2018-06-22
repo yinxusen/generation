@@ -18,6 +18,8 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     """
     src = inputs['src']
     tgt_in = inputs['tgt_in']
+    tgt_sos = inputs['tgt_sos_id']
+    tgt_eos = inputs['tgt_eos_id']
 
     num_tgt_tokens = inputs['num_tgt_tokens']
     num_src_tokens = inputs['num_src_tokens']
@@ -44,16 +46,12 @@ def build_model(mode, inputs, params, sentence_max_len=None):
 
     projection_layer = tf.layers.Dense(units=params.number_of_tags,
                                        use_bias=True)
-    zero_padding = tf.constant([[0] * params.embedding_size],
-                               dtype=tf.float32)
-    src_embeddings_ = tf.get_variable(
+    src_embeddings = tf.get_variable(
         name="src_embeddings", dtype=tf.float32,
         shape=[params.vocab_size, params.embedding_size])
-    src_embeddings = tf.concat([zero_padding, src_embeddings_], axis=0)
-    tgt_embeddings_ = tf.get_variable(
+    tgt_embeddings = tf.get_variable(
         name="tgt_embeddings", dtype=tf.float32,
         shape=[params.number_of_tags, params.embedding_size])
-    tgt_embeddings = tf.concat([zero_padding, tgt_embeddings_], axis=0)
 
     src_emb = tf.nn.embedding_lookup(src_embeddings, src)
     tgt_in_emb = tf.nn.embedding_lookup(tgt_embeddings, tgt_in)
@@ -132,13 +130,13 @@ def build_model(mode, inputs, params, sentence_max_len=None):
             dtype=tf.float32)
         helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
             tgt_embeddings,
-            tf.fill([batch_size], 1), 2)
+            tf.fill([batch_size], tgt_sos), tgt_eos)
         decoder = tf.contrib.seq2seq.BasicDecoder(
             decoder_cell, helper, inner_state,
             output_layer=projection_layer)
         outputs, output_state, _ = tf.contrib.seq2seq.dynamic_decode(
             decoder, output_time_major=False,
-            swap_memory=True, maximum_iterations=5*2)
+            swap_memory=True, maximum_iterations=max_num_tgt_tokens*2)
         output_ta = input_ta.write(t, outputs.rnn_output)
         return t + 1, output_ta, output_state
 
@@ -169,15 +167,10 @@ def model_fn(mode, inputs, params, reuse=False):
         model_spec: (dict) contains the graph operations or nodes needed for training / evaluation
     """
     is_training = (mode == 'train')
-    num_src_tokens = inputs['num_src_tokens']
     num_tgt_tokens = inputs['num_tgt_tokens']
-    num_src_sentences = inputs['num_src_sentences']
-    num_tgt_sentences = inputs['num_tgt_sentences']
 
     mask = tf.sequence_mask(num_tgt_tokens)
     labels = inputs['tgt_out']
-    zero_labels = tf.zeros_like(labels)
-    labels = tf.where(labels > 0, labels - 1, zero_labels)
 
     # -----------------------------------------------------------
     # MODEL: define the layers of the model
