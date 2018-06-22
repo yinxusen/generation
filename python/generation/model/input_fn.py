@@ -88,17 +88,20 @@ def input_fn(mode, sentences, labels, params):
     return inputs
 
 
+def sparse_index_to_count(indices):
+    ones_indices = tf.ones_like(indices, dtype=tf.int32)
+    return tf.segment_sum(ones_indices, indices[:, 0])[:, 0]
+
+
 def string_tensor_to_dense_mat(string_tensor, lookup_tbl):
     return (string_tensor
-     .map(lambda chunks: (tf.string_split(chunks, delimiter='-'),
-                          tf.size(chunks)))
-     .map(lambda chunks, size: (tf.sparse_to_dense(chunks.indices,
-                                chunks.dense_shape,
-                                lookup_tbl.lookup(chunks.values) + 1),
-                                size))
-     .map(lambda dat, size: (dat,
-                             tf.count_nonzero(dat, axis=1, dtype=tf.int32),
-                             size)))
+            .map(lambda chunks: (tf.string_split(chunks, delimiter='-'),
+                                 tf.size(chunks)))
+            .map(lambda chunks, size: (tf.sparse_to_dense(chunks.indices,
+                                       chunks.dense_shape,
+                                       lookup_tbl.lookup(chunks.values)),
+                                       sparse_index_to_count(chunks.indices),
+                                       size)))
 
 
 def load_src_dialogue(path_txt, vocab):
@@ -152,13 +155,17 @@ def dialogue_input_fn(mode,
                       tf.TensorShape([None]),  # size(indices)
                       tf.TensorShape([])))  # size(tgt)
 
-    padding_values = ((tf.constant(0, dtype='int64'),
+    src_eos = src_vocab.lookup(tf.constant('</s>'))
+    tgt_eos = tgt_vocab.lookup(tf.constant('</s>'))
+    tgt_sos = tgt_vocab.lookup(tf.constant('<s>'))
+
+    padding_values = ((src_eos,
                        tf.constant(0, dtype='int32'),
                        tf.constant(0, dtype='int32')),
-                      (tf.constant(0, dtype='int64'),
+                      (tgt_eos,
                        tf.constant(0, dtype='int32'),
                        tf.constant(0, dtype='int32')),
-                      (tf.constant(0, dtype='int64'),
+                      (tgt_eos,
                        tf.constant(0, dtype='int32'),
                        tf.constant(0, dtype='int32')))
 
@@ -190,7 +197,9 @@ def dialogue_input_fn(mode,
         'tgt_out': tgt_out,
         'num_tgt_tokens': num_tgt_tokens,
         'num_tgt_sentences': num_tgt_sentences,
-        'iterator_init_op': init_op
+        'iterator_init_op': init_op,
+        'tgt_sos_id': tgt_sos,
+        'tgt_eos_id': tgt_eos
     }
 
     return inputs
