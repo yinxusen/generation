@@ -97,11 +97,13 @@ def string_tensor_to_dense_mat(string_tensor, lookup_tbl):
     return (string_tensor
             .map(lambda chunks: (tf.string_split(chunks, delimiter='-'),
                                  tf.size(chunks)))
-            .map(lambda chunks, size: (tf.sparse_to_dense(chunks.indices,
-                                       chunks.dense_shape,
-                                       lookup_tbl.lookup(chunks.values)),
-                                       sparse_index_to_count(chunks.indices),
-                                       size)))
+            .map(lambda chunks, size: (
+                tf.sparse_to_dense(chunks.indices,
+                                   chunks.dense_shape,
+                                   tf.cast(lookup_tbl.lookup(chunks.values),
+                                           tf.int32)),
+                sparse_index_to_count(chunks.indices),
+                size)))
 
 
 def load_src_dialogue(path_txt, vocab):
@@ -155,9 +157,9 @@ def dialogue_input_fn(mode,
                       tf.TensorShape([None]),  # size(indices)
                       tf.TensorShape([])))  # size(tgt)
 
-    src_eos = src_vocab.lookup(tf.constant('</s>'))
-    tgt_eos = tgt_vocab.lookup(tf.constant('</s>'))
-    tgt_sos = tgt_vocab.lookup(tf.constant('<s>'))
+    src_eos = tf.cast(src_vocab.lookup(tf.constant('</s>')), tf.int32)
+    tgt_eos = tf.cast(tgt_vocab.lookup(tf.constant('</s>')), tf.int32)
+    tgt_sos = tf.cast(tgt_vocab.lookup(tf.constant('<s>')), tf.int32)
 
     padding_values = ((src_eos,
                        tf.constant(0, dtype='int32'),

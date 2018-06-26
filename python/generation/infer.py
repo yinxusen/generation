@@ -73,13 +73,17 @@ if __name__ == '__main__':
         saver.restore(sess, save_path)
 
         num_steps = steps_per_epoch(params.infer_size, params.batch_size)
+        acc_total = 0
         with open('{}/infer-of-test.txt'.format(args.data_dir), 'w') as f_infer:
             for i in trange(num_steps):
-                pred, t_len, s_len = sess.run(
-                    [idx2tags.lookup(model_spec['predictions']),
+                pred, t_len, s_len, acc = sess.run(
+                    [idx2tags.lookup(tf.to_int64(model_spec['predictions'])),
                      inputs['num_tgt_tokens'],
-                     inputs['num_tgt_sentences']])
+                     inputs['num_tgt_sentences'],
+                     model_spec['accuracy']])
+                acc_total += acc
                 for raw_sentences, n_tokens, n_sentences in zip(pred, t_len, s_len):
                     f_infer.write('\n')
                     for x, y in zip(raw_sentences[:n_sentences], n_tokens[:n_sentences]):
                         f_infer.write('{}\n'.format(' '.join(x[:y])))
+        print(1. * acc_total / num_steps)

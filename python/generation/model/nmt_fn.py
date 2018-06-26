@@ -177,7 +177,7 @@ def model_fn(mode, inputs, params, reuse=False):
     with tf.variable_scope('model', reuse=reuse):
         # Compute the output distribution of the model and the predictions
         logits = build_model(mode, inputs, params)
-        predictions = tf.argmax(logits, -1)
+        predictions = tf.argmax(logits, -1, output_type=tf.int32)
 
     # Define loss and accuracy (we need to apply a mask to account for padding)
     losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
