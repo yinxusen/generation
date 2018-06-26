@@ -100,7 +100,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
         target_length = num_tgt_tokens_ta.read(t)
         _, inner_state = tf.nn.dynamic_rnn(
             encoder_cell, src_sentence, sequence_length=source_length,
-            initial_state=None,
+            initial_state=input_state,
             dtype=tf.float32)
         helper = tf.contrib.seq2seq.TrainingHelper(
             tgt_in_sentence,
@@ -121,12 +121,10 @@ def build_model(mode, inputs, params, sentence_max_len=None):
 
     def process_dialogue_infer(t, input_ta, input_state):
         src_sentence = src_ta.read(t)
-        tgt_in_sentence = tgt_in_ta.read(t)  # ? don't need
         source_length = num_src_tokens_ta.read(t)
-        target_length = num_tgt_tokens_ta.read(t)  # ? don't need
         _, inner_state = tf.nn.dynamic_rnn(
             encoder_cell, src_sentence, sequence_length=source_length,
-            initial_state=None,
+            initial_state=input_state,
             dtype=tf.float32)
         helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
             tgt_embeddings,
