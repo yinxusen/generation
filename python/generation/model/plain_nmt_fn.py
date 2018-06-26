@@ -59,7 +59,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
         encoder_cell, src_emb, sequence_length=num_src_tokens,
         initial_state=None,
         dtype=tf.float32)
-    if mode == 'train':
+    if mode == 'train' or mode == 'eval':
         helper = tf.contrib.seq2seq.TrainingHelper(
             tgt_in_emb,
             num_tgt_tokens,
