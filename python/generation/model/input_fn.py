@@ -216,8 +216,8 @@ if __name__ == '__main__':
     path_json = model_dir + '/params.json'
     path_src_vocab = data_dir + '/words.txt'
     path_tgt_vocab = data_dir + '/tags.txt'
-    path_src = data_dir + '/dev/sentences.txt'
-    path_tgt = data_dir + '/dev/labels.txt'
+    path_src = data_dir + '/test/sentences.txt'
+    path_tgt = data_dir + '/test/labels.txt'
 
     params = Params(path_json)
     params.update(data_dir + '/dataset_params.json')
