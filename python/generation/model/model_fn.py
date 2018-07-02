@@ -25,7 +25,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
 
         # Apply LSTM over the embeddings
         lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(params.lstm_num_units)
-        output, _  = tf.nn.dynamic_rnn(lstm_cell, sentence, dtype=tf.float32)
+        output, _ = tf.nn.dynamic_rnn(lstm_cell, sentence, dtype=tf.float32)
 
         # Compute logits from the output of the LSTM
         logits = tf.layers.dense(output, params.number_of_tags)
