@@ -33,6 +33,9 @@ def create_standard_hparams():
         train_size=0,
         test_size=0,
         dev_size=0,
+        buffer_size=0,
+        eval_size=0,
+        infer_size=0,
 
         # Networks
         model_version='lstm',
