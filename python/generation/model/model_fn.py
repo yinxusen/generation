@@ -20,7 +20,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     if params.model_version == 'lstm':
         # Get word embeddings for each token in the sentence
         embeddings = tf.get_variable(name="embeddings", dtype=tf.float32,
-                shape=[params.vocab_size, params.embedding_size])
+                shape=[params.player_vocab_size, params.embedding_size])
         sentence = tf.nn.embedding_lookup(embeddings, sentence)
 
         # Apply LSTM over the embeddings
@@ -28,12 +28,12 @@ def build_model(mode, inputs, params, sentence_max_len=None):
         output, _ = tf.nn.dynamic_rnn(lstm_cell, sentence, dtype=tf.float32)
 
         # Compute logits from the output of the LSTM
-        logits = tf.layers.dense(output, params.number_of_tags)
+        logits = tf.layers.dense(output, params.master_vocab_size)
 
     elif params.model_version == 'stack_lstm':
         # Get word embeddings for each token in the sentence
         embeddings = tf.get_variable(name="embeddings", dtype=tf.float32,
-                shape=[params.vocab_size, params.embedding_size])
+                shape=[params.player_vocab_size, params.embedding_size])
         sentence = tf.nn.embedding_lookup(embeddings, sentence)
 
         # Forward pass
@@ -48,7 +48,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
         output, _ = tf.nn.dynamic_rnn(
             cell, sentence, dtype=tf.float32)
 
-        logits = tf.layers.dense(output, params.number_of_tags)
+        logits = tf.layers.dense(output, params.master_vocab_size)
     else:
         raise NotImplementedError("Unknown model version: {}".format(params.model_version))
 

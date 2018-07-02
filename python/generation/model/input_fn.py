@@ -25,13 +25,13 @@ def load_dataset_from_text(path_txt, vocab):
     return dataset
 
 
-def input_fn(mode, sentences, labels, params):
+def input_fn(mode, player, master, params):
     """Input function for NER
 
     Args:
         mode: (string) 'train', 'eval' or any other mode you can think of
                      At training, we shuffle the data and have multiple epochs
-        sentences: (tf.Dataset) yielding list of ids of words
+        player: (tf.Dataset) yielding list of ids of words
         datasets: (tf.Dataset) yielding list of ids of tags
         params: (Params) contains hyperparameters of the model (ex: `params.num_epochs`)
 
@@ -41,18 +41,18 @@ def input_fn(mode, sentences, labels, params):
     is_infering = (mode == 'infer')
     buffer_size = params.buffer_size if is_training else 1
 
-    # Zip the sentence and the labels together
-    dataset = tf.data.Dataset.zip((sentences, labels))
+    # Zip the sentence and the master together
+    dataset = tf.data.Dataset.zip((player, master))
 
-    # Create batches and pad the sentences of different length
+    # Create batches and pad the player of different length
     padded_shapes = ((tf.TensorShape([None]),  # sentence of unknown size
                       tf.TensorShape([])),     # size(words)
-                     (tf.TensorShape([None]),  # labels of unknown size
+                     (tf.TensorShape([None]),  # master of unknown size
                       tf.TensorShape([])))     # size(tags)
 
     padding_values = ((params.id_pad_word,   # sentence padded on the right with id_pad_word
                        0),                   # size(words) -- unused
-                      (params.id_pad_tag,    # labels padded on the right with id_pad_tag
+                      (params.id_pad_tag,    # master padded on the right with id_pad_tag
                        0))                   # size(tags) -- unused
 
     if is_infering:
@@ -74,13 +74,13 @@ def input_fn(mode, sentences, labels, params):
     iterator = dataset.make_initializable_iterator()
 
     # Query the output of the iterator for input to the model
-    ((sentence, sentence_lengths), (labels, _)) = iterator.get_next()
+    ((sentence, sentence_lengths), (master, _)) = iterator.get_next()
     init_op = iterator.initializer
 
     # Build and return a dictionnary containing the nodes / ops
     inputs = {
         'sentence': sentence,
-        'labels': labels,
+        'master': master,
         'sentence_lengths': sentence_lengths,
         'iterator_init_op': init_op
     }
@@ -186,19 +186,19 @@ def dialogue_input_fn(mode,
                    .prefetch(1))
 
     iterator = dataset.make_initializable_iterator()
-    ((src, num_src_tokens, num_src_sentences),
-     (tgt_in, num_tgt_tokens, num_tgt_sentences),
+    ((src, num_src_tokens, num_src_player),
+     (tgt_in, num_tgt_tokens, num_tgt_player),
      (tgt_out, _, _)) = iterator.get_next()
     init_op = iterator.initializer
 
     inputs = {
         'src': src,
         'num_src_tokens': num_src_tokens,
-        'num_src_sentences': num_src_sentences,
+        'num_src_player': num_src_player,
         'tgt_in': tgt_in,
         'tgt_out': tgt_out,
         'num_tgt_tokens': num_tgt_tokens,
-        'num_tgt_sentences': num_tgt_sentences,
+        'num_tgt_player': num_tgt_player,
         'iterator_init_op': init_op,
         'tgt_sos_id': tgt_sos,
         'tgt_eos_id': tgt_eos
@@ -216,8 +216,8 @@ if __name__ == '__main__':
     path_json = model_dir + '/params.json'
     path_src_vocab = data_dir + '/words.txt'
     path_tgt_vocab = data_dir + '/tags.txt'
-    path_src = data_dir + '/test/sentences.txt'
-    path_tgt = data_dir + '/test/labels.txt'
+    path_src = data_dir + '/test/player.txt'
+    path_tgt = data_dir + '/test/master.txt'
 
     params = Params(path_json)
     params.update(data_dir + '/dataset_params.json')

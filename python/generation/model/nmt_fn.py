@@ -44,14 +44,14 @@ def build_model(mode, inputs, params, sentence_max_len=None):
         raise ValueError(
             'Unknown model_version: {}'.format(params.model_version))
 
-    projection_layer = tf.layers.Dense(units=params.number_of_tags,
+    projection_layer = tf.layers.Dense(units=params.master_vocab_size,
                                        use_bias=True)
     src_embeddings = tf.get_variable(
         name="src_embeddings", dtype=tf.float32,
-        shape=[params.vocab_size, params.embedding_size])
+        shape=[params.player_vocab_size, params.embedding_size])
     tgt_embeddings = tf.get_variable(
         name="tgt_embeddings", dtype=tf.float32,
-        shape=[params.number_of_tags, params.embedding_size])
+        shape=[params.master_vocab_size, params.embedding_size])
 
     src_emb = tf.nn.embedding_lookup(src_embeddings, src)
     tgt_in_emb = tf.nn.embedding_lookup(tgt_embeddings, tgt_in)
@@ -70,7 +70,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
     init_ta = tf.TensorArray(
        dtype=tf.float32, size=time_steps,
        element_shape=tgt_in_emb_time_major.shape[1:-1].concatenate(
-           tf.TensorShape([params.number_of_tags])))
+           tf.TensorShape([params.master_vocab_size])))
 
     src_ta = tf.TensorArray(
         dtype=src_emb_time_major.dtype, size=time_steps,
