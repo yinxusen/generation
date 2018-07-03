@@ -33,10 +33,10 @@ if __name__ == '__main__':
     set_logger(os.path.join(args.model_dir, 'inferring.log'))
 
     # Get paths for vocabularies and dataset
-    path_words = os.path.join(args.data_dir, 'words.txt')
-    path_tags = os.path.join(args.data_dir, 'tags.txt')
-    path_eval_sentences = os.path.join(args.data_dir, 'test/sentences.txt')
-    path_eval_labels = os.path.join(args.data_dir, 'test/labels.txt')
+    path_words = os.path.join(args.data_dir, 'player-tokens.txt')
+    path_tags = os.path.join(args.data_dir, 'master-tokens.txt')
+    path_eval_sentences = os.path.join(args.data_dir, 'test/player.txt')
+    path_eval_labels = os.path.join(args.data_dir, 'test/master.txt')
 
     # Create the input data pipeline
     logging.info("Creating the dataset...")

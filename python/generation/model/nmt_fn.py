@@ -134,7 +134,7 @@ def build_model(mode, inputs, params, sentence_max_len=None):
             output_layer=projection_layer)
         outputs, output_state, _ = tf.contrib.seq2seq.dynamic_decode(
             decoder, output_time_major=False, impute_finished=True,
-            swap_memory=True, maximum_iterations=max_num_tgt_tokens*2)
+            swap_memory=True, maximum_iterations=max_num_tgt_tokens)
         rnn_output = outputs.rnn_output
         shape = tf.shape(rnn_output)
         paddings = tf.zeros(shape=[shape[0], max_num_tgt_tokens-shape[1], shape[2]])

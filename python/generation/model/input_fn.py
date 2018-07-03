@@ -186,19 +186,19 @@ def dialogue_input_fn(mode,
                    .prefetch(1))
 
     iterator = dataset.make_initializable_iterator()
-    ((src, num_src_tokens, num_src_player),
-     (tgt_in, num_tgt_tokens, num_tgt_player),
+    ((src, num_src_tokens, num_src_sentences),
+     (tgt_in, num_tgt_tokens, num_tgt_sentences),
      (tgt_out, _, _)) = iterator.get_next()
     init_op = iterator.initializer
 
     inputs = {
         'src': src,
         'num_src_tokens': num_src_tokens,
-        'num_src_player': num_src_player,
+        'num_src_sentences': num_src_sentences,
         'tgt_in': tgt_in,
         'tgt_out': tgt_out,
         'num_tgt_tokens': num_tgt_tokens,
-        'num_tgt_player': num_tgt_player,
+        'num_tgt_sentences': num_tgt_sentences,
         'iterator_init_op': init_op,
         'tgt_sos_id': tgt_sos,
         'tgt_eos_id': tgt_eos
@@ -209,18 +209,20 @@ def dialogue_input_fn(mode,
 
 if __name__ == '__main__':
     from utils import Params, transpose_batch_time, input_batch_size, steps_per_epoch
+    from standard_hparams_utils import create_standard_hparams, load_from_json
     from nmt_fn import build_model
 
-    data_dir = '/Users/xusenyin/git-store/dnd/dataset-for-dialogue'
-    model_dir = '/Users/xusenyin/experiments/dialogue-model'
+    data_dir = '/Users/xusenyin/git-store/dnd-v1.0/dataset-for-dialogue'
+    model_dir = '/Users/xusenyin/experiments/9-corner-dialogue-model'
     path_json = model_dir + '/params.json'
-    path_src_vocab = data_dir + '/words.txt'
-    path_tgt_vocab = data_dir + '/tags.txt'
+    path_src_vocab = data_dir + '/player-tokens.txt'
+    path_tgt_vocab = data_dir + '/master-tokens.txt'
     path_src = data_dir + '/test/player.txt'
     path_tgt = data_dir + '/test/master.txt'
 
-    params = Params(path_json)
-    params.update(data_dir + '/dataset_params.json')
+    params = create_standard_hparams()
+    params = load_from_json(params, path_json)
+    params = load_from_json(params, data_dir + '/dataset_params.json')
     params.eval_size = params.dev_size
     params.buffer_size = params.train_size  # buffer size for shuffling
 
@@ -231,12 +233,12 @@ if __name__ == '__main__':
     tgt_input = inputs['tgt_in']
     tgt_output = inputs['tgt_out']
     num_tgt_tokens = inputs['num_tgt_tokens']
-    res = tf.reduce_max(num_tgt_tokens, axis=0)
+    res = tf.reduce_max(num_tgt_tokens)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(tf.tables_initializer())
         sess.run(inputs['iterator_init_op'])
 
-        for i in range(steps_per_epoch(2000, 128)):
+        for i in range(steps_per_epoch(params.test_size, params.batch_size)):
             print(sess.run([tf.shape(res), res]))

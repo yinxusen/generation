@@ -48,3 +48,9 @@ def create_standard_hparams():
         dropout_rate=.0,
         save_summary_steps=0,
     )
+
+
+def load_from_json(params, j_file):
+    with open(j_file, 'r') as p:
+        params.parse_json(p.read())
+    return params
